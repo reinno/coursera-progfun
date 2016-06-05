@@ -60,6 +60,10 @@ class BloxorzSuite extends FunSuite {
     new Level1 {
       assert(startPos == Pos(1,1))
     }
+
+    new Level1 {
+      assert(goal == Pos(4, 7))
+    }
   }
 
 
