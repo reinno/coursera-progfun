@@ -11,8 +11,8 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
 
   lazy val genHeap: Gen[H] = for {
     x <- arbitrary[A]
-    m <- frequency((100, genHeap), (1, const(empty)))
-  } yield insert(x, m)
+    h <- oneOf(const(empty), genHeap)
+  } yield insert(x, h)
 
   implicit lazy val arbHeap: Arbitrary[H] = Arbitrary(genHeap)
 
@@ -21,54 +21,86 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
     findMin(insert(m, h)) == m
   }
 
-  property("gen2") = forAll { (m1: A, m2: A) =>
+  property("find min of 2") = forAll { (m1: A, m2: A) =>
     val m = if (m1 < m2) m1 else m2
     findMin(insert(m2, insert(m1, empty))) == m
   }
 
-  property("gen3") = forAll { (m: A) =>
-    isEmpty(deleteMin(insert(m, empty)))
+  property("delete the only element") = forAll { (m: A) =>
+    deleteMin(insert(m, empty)) == empty
   }
 
-  property("gen4") = forAll { (h: H) =>
-    def loop(h: H, last: A): Boolean = {
+  property("heap is sorted") = forAll { (h: H) =>
+    def isSorted(h: H, last: A): Boolean = {
       if (isEmpty(h)) {
         true
       }
       else {
         val m  = findMin(h)
         if (m < last) false
-        else loop(deleteMin(h), m)
+        else isSorted(deleteMin(h), m)
       }
     }
 
-    loop(deleteMin(h), findMin(h))
+    isSorted(deleteMin(h), findMin(h))
   }
 
 
-  property("gen5") = forAll { (h1: H, h2: H) =>
-    val m1 = if (isEmpty(h1)) 0 else findMin(h1)
-    val m2 = if (isEmpty(h2)) 0 else findMin(h2)
-    val m = if (m1 < m2) m1 else m2
-    //findMin(meld(h1, h2)) == m
+  property("heap move 1 element is sorted") = forAll { (h: H) =>
+    isSorted(deleteMin(h))
+  }
 
-    if (isEmpty(h1)) {
-      if (isEmpty(h2)) {
-        true
-      } else {
-        findMin(meld(h1, h2)) == m1
+  property("find min of 2 heap") = forAll { (h1: H, h2: H) =>
+    val meldHeap = meld(h1, h2)
+    val m1 = findMin(h1)
+    val m2 = findMin(h2)
+
+    findMin(meldHeap) == (if (m1 < m2) m1 else m2)
+  }
+
+  property("check move 1 element meld") = forAll { (h1: H, h2: H) =>
+    val meld1 = meld(h1, h2)
+    val m1 = findMin(h1)
+    val meld2 = meld(deleteMin(h1), insert(m1, h2))
+
+    isEqual(meld1, meld2)
+  }
+
+
+  property("check heap not lost ele") = forAll { (x: List[A]) =>
+    def loopInsert(h: H, x: List[A]): H = {
+      x match {
+        case Nil => h
+        case head::tail => loopInsert(insert(head, h), tail)
       }
-    } else {
-      if (isEmpty(h2)) {
-        findMin(meld(h1, h2)) == m2
-      } else {
-        findMin(meld(h1, h2)) == m
-      }
+    }
+
+    val h = loopInsert(empty, x)
+    getSize(h) == x.size
+  }
+
+  private def isSorted(h: H): Boolean = {
+    if (isEmpty(h)) {
+      true
+    }
+    else {
+      val m  = findMin(h)
+      val hNext = deleteMin(h)
+      isEmpty(hNext) || (m <= findMin(hNext) && isSorted(hNext))
     }
   }
 
+  private def isEqual(h1: H, h2: H): Boolean =
+    if (isEmpty(h1) && isEmpty(h2)) {
+      true
+    }
+    else {
+      val m1 = findMin(h1)
+      val m2 = findMin(h2)
+      m1 == m2 && isEqual(deleteMin(h1), deleteMin(h2))
+    }
 
-  property("gen6") = forAll { (x: List[A]) =>
+  private def getSize(h: H): Int = {
     def getNum(h: H, num: Int): Int = {
       if (isEmpty(h)) {
         num
@@ -78,25 +110,6 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
       }
     }
 
-    def loopInsert(h: H, x: List[A]): H = {
-      x match {
-        case Nil => h
-        case head::tail => loopInsert(insert(head, h), tail)
-      }
-    }
-
-    def loop(h: H, last: A): Boolean = {
-      if (isEmpty(h)) {
-        true
-      }
-      else {
-        val m  = findMin(h)
-        if (m < last) false
-        else loop(deleteMin(h), m)
-      }
-    }
-
-    val h = loopInsert(empty, x)
-    getNum(h, 0) == x.size && (if (isEmpty(h)) true else loop(deleteMin(h), findMin(h)))
+    getNum(h, 0)
   }
 }
